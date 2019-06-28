@@ -10,6 +10,6 @@ export default function ready(client) {
       name: 'Quizbowl!',
       type: 'PLAYING',
     },
-    status: 'idle',
+    status: 'online',
   });
 };

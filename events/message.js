@@ -1,5 +1,5 @@
 import {kickMember} from '../functions/mainten.js';
-import {getTossup} from '../functions/reading.js';
+import {readQuestion} from '../functions/reading.js';
 const config = require('../config.json');
 
 /**
@@ -19,5 +19,5 @@ export default async function message(client, msg) {
 
   await kickMember(msg);
 
-  await getTossup(msg);
+  await readQuestion(msg);
 };
