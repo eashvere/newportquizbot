@@ -242,7 +242,7 @@ export async function readTossup(client, channel, category='', text=true, voiceC
               } else {
                 await channel.send(`Correct! ${collected.author.username}, 10 points!`);
               }
-              if (voiceChannel) dispatcher.destroy();
+              if (voiceChannel) dispatcher.end();
               return;
             }
             if (answercheck === 'n' || answercheck === 'p') {
@@ -318,10 +318,11 @@ export async function readTossup(client, channel, category='', text=true, voiceC
 
         voiceChannel.join()
             .then((connection) => {
-              reading = false;
+              reading = true;
               dispatcher = connection.playFile(pathToSoundFile);
 
               dispatcher.on('end', () => {
+                reading = false;
                 if (correct) return;
                 channel.send(`Players have 15 seconds to finish this question`)
                     .then(() => {
