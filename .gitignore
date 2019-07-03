@@ -2,3 +2,5 @@ node_modules/
 quizdb-05302019.sql
 quizdb-01222019.sql
 .env
+*.mp3
+*.wav

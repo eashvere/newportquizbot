@@ -8,10 +8,25 @@ module.exports = {
   description: 'Get a Tossup Question',
   usage: '<category>',
   cooldown: 5,
-  guildOnly: true,
   async execute(msg, args) {
     let category = args[0];
-    let text = true; // args[1];
+    let text = args[1];
+    let voiceChannel;
+
+    if (msg.channel.type === 'dm' || msg.channel.type === 'group') {
+      text = true;
+    }
+
+    if (!text) {
+      text = false;
+      if (!msg.member.voiceChannel) {
+        await msg.reply(`Because you didn't join a voice channel, I can't talk to you!. Join it and .t ! Or ask for a text question`);
+        return;
+      }
+      voiceChannel = msg.member.voiceChannel;
+    }
+
+    console.log(text);
 
     if (category) {
       const res = findBestMatch(category, categories.concat(Object.keys(aliases)));
@@ -29,6 +44,6 @@ module.exports = {
       console.log(`${msg.author.username} ordered a random Tossup`);
     }
 
-    await readTossup(msg.client, msg.channel, category=category, text=text);
+    await readTossup(msg.client, msg.channel, category=category, text=text, voiceChannel=voiceChannel);
   },
 };

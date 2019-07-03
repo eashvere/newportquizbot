@@ -3,6 +3,7 @@ import {compareTwoStrings} from 'string-similarity';
 const util = require('util');
 const say = require('say');
 const index = require('../index.js');
+const path = require('path');
 
 /**
  * Check if an answer is correct
@@ -47,7 +48,7 @@ function match(given, answer, formatted, isPrompt) {
         const phrase = given.split(' ').slice(i, i + numWords).join(' ');
         const ratio = compareTwoStrings(phrase.toLowerCase(), bold.toLowerCase());
         console.log(`Bold: ${bold}, Phrase: ${phrase}, Ratio: ${ratio}`);
-        console.log(ratio > 0.75);
+        // console.log(ratio > 0.75);
         if (ratio > 0.75) {
           // console.log('This is happening');
           match = 'y';
@@ -162,17 +163,20 @@ async function printAnswer(channel, answer, formatted) {
  * @param   {Channel} channel The location of the question order
  * @param   {String} category The category for the question
  * @param   {Boolean} text Whether the question should be kept to text only
+ * @param   {VoiceChannel} voiceChannel The voiceChannel, if there is one, that the asker is part of
  *
  */
-export async function readTossup(client, channel, category='', text=false) {
+export async function readTossup(client, channel, category='', text=true, voiceChannel='') {
+  let correct = false;
   let reading = false;
   let paused = false;
   let buzz = false;
   const gTossup = util.promisify(getTossup);
   let q;
   let answercheck;
+  let dispatcher; // The voiceChannel controller!
 
-  gTossup(category, 1).then((res) => {
+  gTossup(category, 1).then( async (res) => {
     let isPower = res.power; // Whether power has occured yet
 
     printAnswer(channel, res.answer, res.answer.includes('/strong'));
@@ -184,6 +188,7 @@ export async function readTossup(client, channel, category='', text=false) {
     index.events.on('buzz', async (msg) => {
       if (channel.id !== msg.channel.id || buzz) return;
 
+      if (voiceChannel) dispatcher.pause();
       paused = true;
       buzz = true;
       const filter = (response) => {
@@ -231,11 +236,13 @@ export async function readTossup(client, channel, category='', text=false) {
               await promptLoop();
             } */
             if (answercheck === 'y') {
+              correct = true;
               if (isPower) {
                 await channel.send(`Amazing Job ${collected.author.username}, you answered correctly in power! You get 15 points!`);
               } else {
                 await channel.send(`Correct! ${collected.author.username}, 10 points!`);
               }
+              if (voiceChannel) dispatcher.destroy();
               return;
             }
             if (answercheck === 'n' || answercheck === 'p') {
@@ -247,6 +254,7 @@ export async function readTossup(client, channel, category='', text=false) {
               }
             }
 
+            if (voiceChannel) dispatcher.resume();
             paused = false;
           })
           .catch( async (collected) => {
@@ -257,11 +265,13 @@ export async function readTossup(client, channel, category='', text=false) {
             } else {
               await channel.send(`Since you buzzed after the question was done, you're off the hook`);
             }
+
+            if (voiceChannel) dispatcher.resume();
             paused = false;
           });
     });
 
-    if (channel.type === 'dm' || channel.type === 'group' || text) {
+    if (text) {
       reading = true;
       const qArray = res.text.split(' ');
       let interval;
@@ -275,7 +285,9 @@ export async function readTossup(client, channel, category='', text=false) {
           channel.send(`Players have 15 seconds to finish this question`)
               .then(() => {
                 setTimeout(() => {
-                  channel.send(`Your 15 seconds are up`);
+                  if (!correct) {
+                    channel.send(`Your 15 seconds are up`);
+                  }
                 }, 15000);
               });
         }
@@ -292,6 +304,38 @@ export async function readTossup(client, channel, category='', text=false) {
         interval = setInterval(function() {
           update(msg, value);
         }, 1600);
+      });
+    } else {
+      isPower = false;
+      res.text = res.text.replace('\"', '');
+      // console.log(res.text);
+      const pathToSoundFile = path.join(__dirname, 'extras/question.wav');
+      say.export(res.text, 'Microsoft David Desktop', 1, pathToSoundFile, (err) => {
+        if (err) {
+          return console.error(err);
+        }
+        console.log('Text has been saved to question.wav.');
+
+        voiceChannel.join()
+            .then((connection) => {
+              reading = false;
+              dispatcher = connection.playFile(pathToSoundFile);
+
+              dispatcher.on('end', () => {
+                if (correct) return;
+                channel.send(`Players have 15 seconds to finish this question`)
+                    .then(() => {
+                      setTimeout( async () => {
+                        if (!correct) {
+                          channel.send(`Your 15 seconds are up`);
+                        }
+                        dispatcher.destroy();
+                        connection.disconnect();
+                      }, 15000);
+                    });
+              });
+            })
+            .catch(console.error);
       });
     }
   }).catch((err) => {
