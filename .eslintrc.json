@@ -14,8 +14,25 @@
         "sourceType": "module",
         "allowImportExportEverywhere": true
     },
+    "plugins": [
+        "sql"
+    ],
     "rules": {
         "max-len": ["error", { "code": 300 }],
-        "strict": 0
+        "strict": 0,
+        "sql/format": [
+            2,
+            {
+              "ignoreExpressions": false,
+              "ignoreInline": true,
+              "ignoreTagless": true
+            }
+        ],
+        "sql/no-unsafe-query": [
+            2,
+            {
+              "allowLiteral": false
+            }
+        ]
     }
 }

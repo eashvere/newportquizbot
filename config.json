@@ -1,5 +1,6 @@
 {
-	"prefix": "? for questions & ! for actions",  
+	"prefixInstruct": ". for questions & ! for actions",
+	"prefix": ".",
 	"botName": "QuizBowler", 
 	"botDesc": "A QuizBowl Bot for Newport", 
 	"ownerID": "N1cke1#6093"
