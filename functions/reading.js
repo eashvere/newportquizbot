@@ -1,6 +1,5 @@
 import {getTossup} from './quizdb.js';
 import {compareTwoStrings} from 'string-similarity';
-const util = require('util');
 const say = require('say');
 const index = require('../index.js');
 const path = require('path');
@@ -12,91 +11,86 @@ const path = require('path');
  * @param   {Boolean} formatted Whether the thing is formatted
  * @param   {Boolean} isPrompt Whether we are prompting
  *
- * @return  {String} Either 'y', 'n', or 'p' for yes, no, or prompt
+ * @return {Promise}
  */
 function match(given, answer, formatted, isPrompt) {
-  const strong = [];
-  let i = 0;
-  let marker = 0;
-  let tag = false;
-  let prompt = false;
-  let match = 'n';
-  if (formatted) {
-    answer = answer.replace('<u>', '').replace('</u>', '').replace('<em>', '').replace('</em>', '');
-    console.log(answer);
-    while (i < answer.length) {
-      if (answer[i] === '<' && (answer.substring(i+1, i+7) === 'strong' || answer.substring(i+1, i+3) === 'em') && !tag) {
-        tag = true;
-        while (answer[i] !== '>') {
+  return new Promise(function(resolve, reject) {
+    const strong = [];
+    let i = 0;
+    let marker = 0;
+    let tag = false;
+    let prompt = false;
+    let match = 'n';
+    if (formatted) {
+      answer = answer.replace('<u>', '').replace('</u>', '').replace('<em>', '').replace('</em>', '');
+      console.log(answer);
+      while (i < answer.length) {
+        if (answer[i] === '<' && (answer.substring(i+1, i+7) === 'strong' || answer.substring(i+1, i+3) === 'em') && !tag) {
+          tag = true;
+          while (answer[i] !== '>') {
+            i += 1;
+          }
           i += 1;
+          marker = i;
+        }
+
+        if (answer[i] === '<' && (answer.substring(i+1, i+8) === '/strong' || answer.substring(i+1, i+4) === '/em') && tag) {
+          strong.push(answer.substring(marker, i).trim());
+          tag = false;
         }
         i += 1;
-        marker = i;
       }
 
-      if (answer[i] === '<' && (answer.substring(i+1, i+8) === '/strong' || answer.substring(i+1, i+4) === '/em') && tag) {
-        strong.push(answer.substring(marker, i).trim());
-        tag = false;
-      }
-      i += 1;
-    }
-
-    for (const bold of strong) {
-      const numWords = bold.split(' ').length;
-      console.log(`Length: ${numWords}`);
-      for (i = 0; i < given.split(' ').length - numWords + 1; i++) {
-        const phrase = given.split(' ').slice(i, i + numWords).join(' ');
-        const ratio = compareTwoStrings(phrase.toLowerCase(), bold.toLowerCase());
-        console.log(`Bold: ${bold}, Phrase: ${phrase}, Ratio: ${ratio}`);
-        // console.log(ratio > 0.75);
-        if (ratio > 0.75) {
-          // console.log('This is happening');
-          match = 'y';
-          // console.log(match);
-          return 'y';
+      for (const bold of strong) {
+        const numWords = bold.split(' ').length;
+        console.log(`Length: ${numWords}`);
+        for (i = 0; i < given.split(' ').length - numWords + 1; i++) {
+          const phrase = given.split(' ').slice(i, i + numWords).join(' ');
+          const ratio = compareTwoStrings(phrase.toLowerCase(), bold.toLowerCase());
+          console.log(`Bold: ${bold}, Phrase: ${phrase}, Ratio: ${ratio}`);
+          if (ratio > 0.75) {
+            match = 'y';
+            resolve(match);
+          }
+          if (ratio > 0.55) {
+            prompt = true;
+          }
         }
-        if (ratio > 0.55) {
-          prompt = true;
-        }
-      }
-    };
+      };
 
-    if (!isPrompt && prompt) {
-      match = 'p';
-      return 'p';
+      if (prompt) {
+        match = 'p';
+        resolve(match);
+      } else {
+        resolve(match);
+      }
     } else {
-      return match;
-    }
-  } else {
-    answer = answer.replace('<em>', '').replace('</em>', '');
-    const answers = answer.replace('The ', '').split(' ');
-    const givens = given.split(' ');
-    let prompt = false;
-    for (const word of answers) {
-      for (const w of givens) {
-        const ratio = compareTwoStrings(w.toLowerCase(), word.toLowerCase());
-        console.log(`Given: ${w}, Answer:${word}`);
-        console.log(`The ratio is ${ratio}`);
-        // console.log(ratio > 0.8);
-        if (ratio > 0.8) {
-          // console.log('This is happening');
-          match = 'y';
-          // console.log(match);
-          return 'y';
-        }
-        if (ratio > 0.55) {
-          prompt = true;
+      answer = answer.replace('<em>', '').replace('</em>', '');
+      const answers = answer.replace('The ', '').split(' ');
+      const givens = given.split(' ');
+      let prompt = false;
+      for (const word of answers) {
+        for (const w of givens) {
+          const ratio = compareTwoStrings(w.toLowerCase(), word.toLowerCase());
+          console.log(`Given: ${w}, Answer:${word}`);
+          console.log(`The ratio is ${ratio}`);
+          if (ratio > 0.8) {
+            match = 'y';
+            resolve(match);
+          }
+          if (ratio > 0.55) {
+            prompt = true;
+          }
         }
       }
+      if (prompt) {
+        match = 'p';
+        resolve(match);
+      }
+      resolve(match);
     }
-    if (!isPrompt && prompt) {
-      match = 'p';
-      return 'p';
-    }
-    return match;
-  }
+  });
 }
-
 
 /**
  * Print the Answer
@@ -171,15 +165,48 @@ export async function readTossup(client, channel, category='', text=true, voiceC
   let reading = false;
   let paused = false;
   let buzz = false;
-  const gTossup = util.promisify(getTossup);
   let q;
   let answercheck;
   let dispatcher; // The voiceChannel controller!
+  let promptLoopCounter = 3;
 
-  gTossup(category, 1).then( async (res) => {
+  getTossup(category, 1).then( async (res) => {
     let isPower = res.power; // Whether power has occured yet
 
     printAnswer(channel, res.answer, res.answer.includes('/strong'));
+
+    const promptLoop = async (currentCorrectness, channel, filter) => {
+      return new Promise(function(resolve, reject) {
+        console.log('You\'ve gone into the prompt loop');
+        console.log(`Are we still paused: ${paused}`);
+        channel.awaitMessages(filter, {maxMatches: 1, time: 10000, errors: ['time']})
+            .then( async (collected) => {
+              promptLoopCounter -= 1;
+              collected = collected.first();
+              if (promptLoopCounter < 1) {
+                currentCorrectness = 'n';
+                return resolve(currentCorrectness);
+              }
+
+              currentCorrectness = await match(collected.content, res.answer, res.answer.includes('</strong'), true);
+              if (currentCorrectness === 'p') {
+                channel.send(`You have ${promptLoopCounter} prompt chances left`);
+                return resolve(await promptLoop(currentCorrectness, channel, filter));
+              }
+
+              console.log(`After Prompt, you ${currentCorrectness}`);
+              return resolve(currentCorrectness);
+            })
+            .catch((err) => {
+              console.log(err);
+              if (err) {
+                return reject(err);
+              } else {
+                return resolve('n');
+              }
+            });
+      });
+    };
 
     if (index.events.listeners('buzz').length > 0) {
       index.events.removeAllListeners('buzz');
@@ -195,34 +222,9 @@ export async function readTossup(client, channel, category='', text=true, voiceC
         return response.content.length > 0 && !response.author.bot;
       };
 
-      /* let promptLoopCounter = 3;
-      const promptLoop = () => {
-        console.log('You\'ve gone into the prompt loop');
-        channel.awaitMessages(filter, {maxMatches: 1, time: 10000, errors: ['time']})
-            .then( async (collected) => {
-              collected = collected.first();
-              console.log(collected);
-              if (promptLoopCounter < 1) {
-                answercheck = 'n';
-                return;
-              }
-              channel.send(`You have ${promptLoopCounter} prompt chances left`);
+      console.log(`${msg.author.username} has buzzed`);
 
-              answercheck = await match(collected.content, res.answer, res.answer.includes('</strong'), true);
-              promptLoopCounter -= 1;
-              if (answercheck === 'p') {
-                channel.send(`Prompt`);
-                await promptLoop();
-              }
-              return;
-            })
-            .catch((err) => {
-              console.log(err);
-              answercheck = 'n';
-            });
-      }; */
-
-      await channel.send(`${msg.author.username} has the floor! You have 5 seconds to answer!`);
+      await channel.send(`${msg.author.username} has the floor! You have 10 seconds to answer!`);
 
       channel.awaitMessages(filter, {maxMatches: 1, time: 10000, errors: ['time']})
           .then( async (collected) => {
@@ -231,10 +233,12 @@ export async function readTossup(client, channel, category='', text=true, voiceC
             answercheck = await match(collected.content, res.answer, res.answer.includes('</strong'));
             console.log(`The match function returns: ${answercheck}`);
 
-            /* if (answercheck === 'p') {
+            if (answercheck === 'p') {
+              promptLoopCounter = 3;
               await channel.send('Prompt'); // TODO FINISH PROMPTING
-              await promptLoop();
-            } */
+              answercheck = await promptLoop(answercheck, channel, filter);
+              console.log(`After Prompting: ${answercheck}`);
+            }
             if (answercheck === 'y') {
               correct = true;
               if (isPower) {
@@ -245,13 +249,14 @@ export async function readTossup(client, channel, category='', text=true, voiceC
               if (voiceChannel) dispatcher.end();
               return;
             }
-            if (answercheck === 'n' || answercheck === 'p') {
+            if (answercheck === 'n') {
               await channel.send(`Oof you got it wrong`);
               if (reading) {
                 await channel.send(`Since you answered while reading, you've been negged 5 points`);
               } else {
                 await channel.send(`Since you buzzed after the question was done, you're off the hook`);
               }
+              buzz = false;
             }
 
             if (voiceChannel) dispatcher.resume();
@@ -266,6 +271,7 @@ export async function readTossup(client, channel, category='', text=true, voiceC
               await channel.send(`Since you buzzed after the question was done, you're off the hook`);
             }
 
+            buzz = false;
             if (voiceChannel) dispatcher.resume();
             paused = false;
           });
