@@ -26,8 +26,6 @@ module.exports = {
       voiceChannel = msg.member.voiceChannel;
     }
 
-    console.log(text);
-
     if (category) {
       const res = findBestMatch(category, categories.concat(Object.keys(aliases)));
       if (res.bestMatch.rating > 0.6) {

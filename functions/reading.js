@@ -23,7 +23,6 @@ function match(given, answer, formatted, isPrompt) {
     let match = 'n';
     if (formatted) {
       answer = answer.replace('<u>', '').replace('</u>', '').replace('<em>', '').replace('</em>', '');
-      console.log(answer);
       while (i < answer.length) {
         if (answer[i] === '<' && (answer.substring(i+1, i+7) === 'strong' || answer.substring(i+1, i+3) === 'em') && !tag) {
           tag = true;
@@ -45,6 +44,7 @@ function match(given, answer, formatted, isPrompt) {
         const numWords = bold.split(' ').length;
         console.log(`Length: ${numWords}`);
         for (i = 0; i < given.split(' ').length - numWords + 1; i++) {
+          bold = bold.replace('<u>', '').replace('</u>', '');
           const phrase = given.split(' ').slice(i, i + numWords).join(' ');
           const ratio = compareTwoStrings(phrase.toLowerCase(), bold.toLowerCase());
           console.log(`Bold: ${bold}, Phrase: ${phrase}, Ratio: ${ratio}`);
@@ -101,8 +101,8 @@ function match(given, answer, formatted, isPrompt) {
  */
 async function printAnswer(channel, answer, formatted) {
   if (!formatted) {
-    // await channel.send(printme);
-    await console.log(`The answer to this question is ${answer}`);
+    await channel.send(printme);
+    console.log(`The answer to this question is ${answer}`);
     return;
   }
   answer = answer.replace('<u>', '').replace('</u>', '');
@@ -147,7 +147,7 @@ async function printAnswer(channel, answer, formatted) {
     }
     i += 1;
   }
-  // await channel.send(printme);
+  await channel.send(printme);
   console.log(`The answer to this question is ${answer}`);
 }
 
@@ -165,20 +165,21 @@ export async function readTossup(client, channel, category='', text=true, voiceC
   let reading = false;
   let paused = false;
   let buzz = false;
+  let full = false;
   let q;
   let answercheck;
   let dispatcher; // The voiceChannel controller!
   let promptLoopCounter = 3;
+  const buzzQueue = [];
 
   getTossup(category, 1).then( async (res) => {
     let isPower = res.power; // Whether power has occured yet
 
-    printAnswer(channel, res.answer, res.answer.includes('/strong'));
+    // printAnswer(channel, res.answer, res.answer.includes('/strong'));
 
     const promptLoop = async (currentCorrectness, channel, filter) => {
       return new Promise(function(resolve, reject) {
         console.log('You\'ve gone into the prompt loop');
-        console.log(`Are we still paused: ${paused}`);
         channel.awaitMessages(filter, {maxMatches: 1, time: 10000, errors: ['time']})
             .then( async (collected) => {
               promptLoopCounter -= 1;
@@ -190,7 +191,11 @@ export async function readTossup(client, channel, category='', text=true, voiceC
 
               currentCorrectness = await match(collected.content, res.answer, res.answer.includes('</strong'), true);
               if (currentCorrectness === 'p') {
-                channel.send(`You have ${promptLoopCounter} prompt chances left`);
+                if (promptLoopCounter === 1) {
+                  channel.send(`You have ${promptLoopCounter} prompt chance left`);
+                } else {
+                  channel.send(`You have ${promptLoopCounter} prompt chances left`);
+                }
                 return resolve(await promptLoop(currentCorrectness, channel, filter));
               }
 
@@ -198,7 +203,6 @@ export async function readTossup(client, channel, category='', text=true, voiceC
               return resolve(currentCorrectness);
             })
             .catch((err) => {
-              console.log(err);
               if (err) {
                 return reject(err);
               } else {
@@ -208,74 +212,94 @@ export async function readTossup(client, channel, category='', text=true, voiceC
       });
     };
 
-    if (index.events.listeners('buzz').length > 0) {
-      index.events.removeAllListeners('buzz');
+    const buzzLoop = () => {
+      return new Promise(async function(resolve, reject) {
+        const msg = buzzQueue.shift();
+        const filter = (response) => {
+          return response.content.length > 0 && !response.author.bot && response.author.id === msg.author.id;
+        };
+
+        await channel.send(`${msg.author.username} has the floor! You have 10 seconds to answer!`);
+
+        channel.awaitMessages(filter, {maxMatches: 1, time: 10000, errors: ['time']})
+            .then( async (collected) => {
+              collected = collected.first();
+              answercheck = await match(collected.content, res.answer, res.answer.includes('</strong'));
+
+              if (answercheck === 'p') {
+                promptLoopCounter = 3;
+                await channel.send('Prompt');
+                answercheck = await promptLoop(answercheck, channel, filter);
+              }
+              if (answercheck === 'y') {
+                correct = true;
+                if (isPower) {
+                  await channel.send(`Amazing Job ${collected.author.username}, you answered correctly in power! You get 15 points!`);
+                } else {
+                  await channel.send(`Correct! ${collected.author.username}, 10 points!`);
+                }
+                resolve(true);
+              }
+              if (answercheck === 'n') {
+                if (reading) {
+                  await channel.send(`Oof you got it wrong. During Q, Neg 5`);
+                } else {
+                  await channel.send(`Oof you got it wrong. After Question so 0`);
+                }
+              }
+              resolve(false);
+            })
+            .catch( async (error) => {
+              if (error) reject(error);
+              if (reading) {
+                await channel.send(`Bruh, you didn't answer. During Q, Neg 5`);
+              } else {
+                await channel.send(`Bruh, you didn't answer. After Question so 0`);
+              }
+              resolve(false);
+            });
+      });
+    };
+
+    const buzzEventName = 'buzz' + channel.id;
+
+    if (index.events.listeners(buzzEventName).length > 0) {
+      index.events.removeAllListeners(buzzEventName);
     }
 
-    index.events.on('buzz', async (msg) => {
-      if (channel.id !== msg.channel.id || buzz) return;
+    index.events.on(buzzEventName, async (msg) => {
+      console.log(`${msg.author.username} has buzzed`);
+      if (full) {
+        await channel.send(`Hey! You can't buzz anymore!`);
+        return;
+      }
+      buzzQueue.push(msg);
+      if (buzz) return;
 
       if (voiceChannel) dispatcher.pause();
       paused = true;
       buzz = true;
-      const filter = (response) => {
-        return response.content.length > 0 && !response.author.bot;
-      };
 
-      console.log(`${msg.author.username} has buzzed`);
+      await nextBuzz();
 
-      await channel.send(`${msg.author.username} has the floor! You have 10 seconds to answer!`);
-
-      channel.awaitMessages(filter, {maxMatches: 1, time: 10000, errors: ['time']})
-          .then( async (collected) => {
-            collected = collected.first();
-            console.log(`The user submitted: ${collected.content}`);
-            answercheck = await match(collected.content, res.answer, res.answer.includes('</strong'));
-            console.log(`The match function returns: ${answercheck}`);
-
-            if (answercheck === 'p') {
-              promptLoopCounter = 3;
-              await channel.send('Prompt'); // TODO FINISH PROMPTING
-              answercheck = await promptLoop(answercheck, channel, filter);
-              console.log(`After Prompting: ${answercheck}`);
-            }
-            if (answercheck === 'y') {
-              correct = true;
-              if (isPower) {
-                await channel.send(`Amazing Job ${collected.author.username}, you answered correctly in power! You get 15 points!`);
-              } else {
-                await channel.send(`Correct! ${collected.author.username}, 10 points!`);
-              }
-              if (voiceChannel) dispatcher.end();
-              return;
-            }
-            if (answercheck === 'n') {
-              await channel.send(`Oof you got it wrong`);
-              if (reading) {
-                await channel.send(`Since you answered while reading, you've been negged 5 points`);
-              } else {
-                await channel.send(`Since you buzzed after the question was done, you're off the hook`);
-              }
-              buzz = false;
-            }
-
-            if (voiceChannel) dispatcher.resume();
-            paused = false;
-          })
-          .catch( async (collected) => {
-            console.log(collected);
-            await channel.send(`Bruh, you didn't answer`);
-            if (reading) {
-              await channel.send(`Since you answered while reading, you've been negged 5 points`);
-            } else {
-              await channel.send(`Since you buzzed after the question was done, you're off the hook`);
-            }
-
-            buzz = false;
-            if (voiceChannel) dispatcher.resume();
-            paused = false;
-          });
+      buzz = false;
+      if (voiceChannel) dispatcher.resume();
+      paused = false;
     });
+
+    const nextBuzz = () => {
+      return new Promise(async function(resolve, reject) {
+        const end = await buzzLoop();
+        if (end) {
+          if (voiceChannel) dispatcher.end(); // Future? Dynamically chaining Promises
+          return;
+        }
+        if (buzzQueue.length > 0) {
+          resolve(await nextBuzz());
+        }
+        resolve(false);
+      });
+    };
 
     if (text) {
       reading = true;
@@ -292,7 +316,9 @@ export async function readTossup(client, channel, category='', text=true, voiceC
               .then(() => {
                 setTimeout(() => {
                   if (!correct) {
-                    channel.send(`Your 15 seconds are up`);
+                    full = true;
+                    channel.send(`15 seconds are up. No more buzzes!`);
+                    printAnswer(channel, res.answer, res.answer.includes('/strong'));
                   }
                 }, 15000);
               });
@@ -314,7 +340,6 @@ export async function readTossup(client, channel, category='', text=true, voiceC
     } else {
       isPower = false;
       res.text = res.text.replace('\"', '');
-      // console.log(res.text);
       const pathToSoundFile = path.join(__dirname, 'extras/question.wav');
       say.export(res.text, 'Microsoft David Desktop', 1, pathToSoundFile, (err) => {
         if (err) {
@@ -334,7 +359,9 @@ export async function readTossup(client, channel, category='', text=true, voiceC
                     .then(() => {
                       setTimeout( async () => {
                         if (!correct) {
-                          channel.send(`Your 15 seconds are up`);
+                          full = true;
+                          channel.send(`15 seconds are up. No more buzzes!`);
+                          printAnswer(channel, res.answer, res.answer.includes('/strong'));
                         }
                         dispatcher.destroy();
                         connection.disconnect();

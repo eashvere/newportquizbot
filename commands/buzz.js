@@ -10,6 +10,7 @@ module.exports = {
   aliases: ['b', 'buzz'],
   description: 'How you should buzz',
   execute(message, args) {
-    index.events.emit('buzz', message);
+    const buzzEventName = 'buzz' + message.channel.id;
+    index.events.emit(buzzEventName, message);
   },
 };
