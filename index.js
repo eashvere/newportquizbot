@@ -24,12 +24,14 @@ exports.events = events;
 console.log('DB ONLINE');
 const client = new Client();
 client.commands = new Collection();
+client.prompts = new Collection();
 
 const commandFiles = readdirSync('./commands').filter((file) => file.endsWith('.js'));
 
 for (const file of commandFiles) {
   const command = require(`./commands/${file}`);
-  client.commands.set(command.name, command);
+  if (command.prompt) client.prompts.set(command.name, command);
+  else client.commands.set(command.name, command);
 }
 
 const cooldowns = new Collection();
@@ -64,17 +66,21 @@ client.on('guildMemberAdd', async (member) => {
 client.on('message', (message) => {
   if (message.author.bot) return;
 
-  if (message.content === 'b' || message.content === 'buzz') {
-    const command = client.commands.get('buzz');
-    command.execute(message);
-    return;
+  let commandName;
+  let command;
+  let args;
+
+  if (!message.content.startsWith(config.prefix)) {
+    if (message.content.split(' ').length === 1) {
+      commandName = message.content.split(' ')[0].toLowerCase();
+      command = client.prompts.get(commandName) || client.prompts.find((cmd) => cmd.aliases && cmd.aliases.includes(commandName));
+    }
+  } else {
+    args = message.content.slice(config.prefix.length).split(/ +/);
+    commandName = args.shift().toLowerCase();
+
+    command = client.commands.get(commandName) || client.commands.find((cmd) => cmd.aliases && cmd.aliases.includes(commandName));
   }
-
-  if (!message.content.startsWith(config.prefix)) return;
-  const args = message.content.slice(config.prefix.length).split(/ +/);
-  const commandName = args.shift().toLowerCase();
-
-  const command = client.commands.get(commandName) || client.commands.find((cmd) => cmd.aliases && cmd.aliases.includes(commandName));
 
   if (!command) return;
 

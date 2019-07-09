@@ -10,15 +10,15 @@ module.exports = {
   cooldown: 5,
   async execute(msg, args) {
     let category = args[0];
-    let text = args[1];
+    let voiceOn = args[1];
     let voiceChannel;
 
     if (msg.channel.type === 'dm' || msg.channel.type === 'group') {
-      text = true;
+      voiceOn = false;
     }
 
-    if (!text) {
-      text = false;
+    if (voiceOn) {
+      voiceOn = true;
       if (!msg.member.voiceChannel) {
         await msg.reply(`Because you didn't join a voice channel, I can't talk to you!. Join it and .t ! Or ask for a text question`);
         return;
@@ -26,7 +26,10 @@ module.exports = {
       voiceChannel = msg.member.voiceChannel;
     }
 
-    if (category) {
+    if (category === '.') {
+      console.log(`${msg.author.username} ordered a random Tossup`);
+      category = '';
+    } else if (category) {
       const res = findBestMatch(category, categories.concat(Object.keys(aliases)));
       if (res.bestMatch.rating > 0.6) {
         category = res.bestMatch.target;
@@ -42,6 +45,6 @@ module.exports = {
       console.log(`${msg.author.username} ordered a random Tossup`);
     }
 
-    await readTossup(msg.client, msg.channel, category=category, text=text, voiceChannel=voiceChannel);
+    await readTossup(msg.client, msg.channel, category=category, voiceOn=voiceOn, voiceChannel=voiceChannel);
   },
 };

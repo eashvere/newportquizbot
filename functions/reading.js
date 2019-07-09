@@ -4,6 +4,17 @@ const say = require('say');
 const index = require('../index.js');
 const path = require('path');
 
+const exportText = (text, voice, speed, fileexport) => { // cuz say ain't promisified
+  return new Promise(function(resolve, reject) {
+    say.export(text, voice, speed, fileexport, (err) => {
+      if (err) {
+        reject(err);
+      }
+      resolve();
+    });
+  });
+};
+
 /**
  * Check if an answer is correct
  * @param   {String} given The person input
@@ -156,11 +167,11 @@ async function printAnswer(channel, answer, formatted) {
  * @param   {Client} client The Bot
  * @param   {Channel} channel The location of the question order
  * @param   {String} category The category for the question
- * @param   {Boolean} text Whether the question should be kept to text only
+ * @param   {Boolean} voiceOn Whether the question should be kept to voice
  * @param   {VoiceChannel} voiceChannel The voiceChannel, if there is one, that the asker is part of
  *
  */
-export async function readTossup(client, channel, category='', text=true, voiceChannel='') {
+export async function readTossup(client, channel, category='', voiceOn=false, voiceChannel='') {
   let correct = false;
   let reading = false;
   let paused = false;
@@ -301,7 +312,7 @@ export async function readTossup(client, channel, category='', text=true, voiceC
       });
     };
 
-    if (text) {
+    if (!voiceOn) {
       reading = true;
       const qArray = res.text.split(' ');
       let interval;
@@ -314,11 +325,11 @@ export async function readTossup(client, channel, category='', text=true, voiceC
           clearInterval(interval);
           channel.send(`Players have 15 seconds to finish this question`)
               .then(() => {
-                setTimeout(() => {
+                setTimeout( async () => {
                   if (!correct) {
                     full = true;
-                    channel.send(`15 seconds are up. No more buzzes!`);
-                    printAnswer(channel, res.answer, res.answer.includes('/strong'));
+                    await channel.send(`15 seconds are up. No more buzzes!`);
+                    await printAnswer(channel, res.answer, res.answer.includes('/strong'));
                   }
                 }, 15000);
               });
@@ -338,13 +349,44 @@ export async function readTossup(client, channel, category='', text=true, voiceC
         }, 1600);
       });
     } else {
-      isPower = false;
-      res.text = res.text.replace('\"', '');
-      const pathToSoundFile = path.join(__dirname, 'extras/question.wav');
-      say.export(res.text, 'Microsoft David Desktop', 1, pathToSoundFile, (err) => {
-        if (err) {
-          return console.error(err);
-        }
+      if (isPower) {
+        const pathToFirstSoundFile = path.join(__dirname, 'extras/question1.wav');
+        const pathToSecondSoundFile = path.join(__dirname, 'extras/question2.wav');
+        const [beforePower, afterPower] = res.text.split('(*)');
+        await exportText(beforePower, 'Microsoft David Desktop', 1, pathToFirstSoundFile);
+        await exportText(afterPower, 'Microsoft David Desktop', 1, pathToSecondSoundFile);
+
+        console.log('Text has been saved to question1.wav and question2.wav');
+        voiceChannel.join()
+            .then((connection) => {
+              reading = true;
+              dispatcher = connection.playFile(pathToFirstSoundFile);
+              dispatcher.on('end', () => { // When the before power wav finishes
+                console.log('Power done');
+                isPower = false;
+                dispatcher = connection.playFile(pathToSecondSoundFile);
+                dispatcher.on('end', () => { // When the question finishes
+                  reading = false;
+                  if (correct) return;
+                  channel.send(`Players have 15 seconds to finish this question`)
+                      .then(() => {
+                        setTimeout( async () => {
+                          if (!correct) {
+                            full = true;
+                            await channel.send(`15 seconds are up. No more buzzes!`);
+                            await printAnswer(channel, res.answer, res.answer.includes('/strong'));
+                          }
+                          dispatcher.destroy();
+                          connection.disconnect();
+                        }, 15000);
+                      });
+                });
+              });
+            })
+            .catch(console.error);
+      } else {
+        const pathToSoundFile = path.join(__dirname, 'extras/question.wav');
+        await exportText(res.text, 'Microsoft David Desktop', 1, pathToSoundFile);
         console.log('Text has been saved to question.wav.');
 
         voiceChannel.join()
@@ -360,8 +402,8 @@ export async function readTossup(client, channel, category='', text=true, voiceC
                       setTimeout( async () => {
                         if (!correct) {
                           full = true;
-                          channel.send(`15 seconds are up. No more buzzes!`);
-                          printAnswer(channel, res.answer, res.answer.includes('/strong'));
+                          await channel.send(`15 seconds are up. No more buzzes!`);
+                          await printAnswer(channel, res.answer, res.answer.includes('/strong'));
                         }
                         dispatcher.destroy();
                         connection.disconnect();
@@ -370,7 +412,7 @@ export async function readTossup(client, channel, category='', text=true, voiceC
               });
             })
             .catch(console.error);
-      });
+      }
     }
   }).catch((err) => {
     console.error(err);
