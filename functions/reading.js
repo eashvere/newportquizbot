@@ -293,7 +293,7 @@ export async function readTossup(client, channel, category='', voiceOn=false, vo
 
       index.events.on(buzzEventName, async (msg) => {
         console.log(`${msg.author.username} has buzzed`);
-        if (full) {
+        if (full || correctWrong.wrong.includes(msg.author.id) || correctWrong.negs.includes(msg.author.id)) {
           await channel.send(`Hey! You can't buzz anymore!`);
           return;
         }
