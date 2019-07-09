@@ -45,6 +45,8 @@ module.exports = {
       console.log(`${msg.author.username} ordered a random Tossup`);
     }
 
-    await readTossup(msg.client, msg.channel, category=category, voiceOn=voiceOn, voiceChannel=voiceChannel);
+    readTossup(msg.client, msg.channel, category=category, voiceOn=voiceOn, voiceChannel=voiceChannel).then((correctWrong) => {
+      console.log(correctWrong);
+    });
   },
 };
