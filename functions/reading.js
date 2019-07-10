@@ -242,6 +242,11 @@ export async function readTossup(client, channel, category='', voiceOn=false, vo
           channel.awaitMessages(filter, {maxMatches: 1, time: 10000, errors: ['time']})
               .then( async (collected) => {
                 collected = collected.first();
+                if (collected.content === 'wd' || collected.content === 'withdraw') {
+                  console.log(`${collected.author.username} is withdrawing`);
+                  resolve(false);
+                  throw new Error('withdraw');
+                }
                 answercheck = await match(collected.content, res.answer, res.answer.includes('</strong'));
 
                 if (answercheck === 'p') {
@@ -273,12 +278,14 @@ export async function readTossup(client, channel, category='', voiceOn=false, vo
               })
               .catch( async (error) => {
                 if (error) reject(error);
-                if (reading) {
-                  correctWrong.negs.push(collected.author.id);
-                  await channel.send(`Bruh, you didn't answer. During Q, Neg 5`);
-                } else {
-                  correctWrong.wrong.push(collected.author.id);
-                  await channel.send(`Bruh, you didn't answer. After Question so 0`);
+                if (error.message !== 'withdraw') { // Cuz idk how else to do it
+                  if (reading) {
+                    correctWrong.negs.push(msg.author.id);
+                    await channel.send(`Bruh, you didn't answer. During Q, Neg 5`);
+                  } else {
+                    correctWrong.wrong.push(msg.author.id);
+                    await channel.send(`Bruh, you didn't answer. After Question so 0`);
+                  }
                 }
                 resolve(false);
               });
