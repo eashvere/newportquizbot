@@ -59,7 +59,7 @@ function match(given, answer, formatted, isPrompt) {
           const phrase = given.split(' ').slice(i, i + numWords).join(' ');
           const ratio = compareTwoStrings(phrase.toLowerCase(), bold.toLowerCase());
           console.log(`Bold: ${bold}, Phrase: ${phrase}, Ratio: ${ratio}`);
-          if (ratio > 0.75) {
+          if (ratio > 0.7) {
             match = 'y';
             resolve(match);
           }
@@ -85,7 +85,7 @@ function match(given, answer, formatted, isPrompt) {
           const ratio = compareTwoStrings(w.toLowerCase(), word.toLowerCase());
           console.log(`Given: ${w}, Answer:${word}`);
           console.log(`The ratio is ${ratio}`);
-          if (ratio > 0.8) {
+          if (ratio > 0.75) {
             match = 'y';
             resolve(match);
           }
@@ -105,14 +105,14 @@ function match(given, answer, formatted, isPrompt) {
 
 /**
  * Print the Answer
- * @param   {channel} channel Where to print
+ * @param   {TextChannel} channel Where to print
  * @param   {String} answer The correct answer raw
  * @param   {Boolean} formatted Whether the thing is formatted
  *
  */
 async function printAnswer(channel, answer, formatted) {
   if (!formatted) {
-    await channel.send(printme);
+    await channel.send(`The answer to this question is ${answer}`);
     console.log(`The answer to this question is ${answer}`);
     return;
   }
@@ -158,20 +158,19 @@ async function printAnswer(channel, answer, formatted) {
     }
     i += 1;
   }
-  await channel.send(printme);
+  await channel.send(`The answer to this question is ${answer}`);
   console.log(`The answer to this question is ${answer}`);
 }
 
 /**
  * Get a Question and read it in a voice channel
- * @param   {Client} client The Bot
- * @param   {Channel} channel The location of the question order
+ * @param   {TextChannel} channel The location of the question order
  * @param   {String} category The category for the question
  * @param   {Boolean} voiceOn Whether the question should be kept to voice
  * @param   {VoiceChannel} voiceChannel The voiceChannel, if there is one, that the asker is part of
  *
  */
-export async function readTossup(client, channel, category='', voiceOn=false, voiceChannel='') {
+export async function readTossup(channel, category='', voiceOn=false, voiceChannel='') {
   return new Promise(function(resolveout, rejectout) {
     let correct = false;
     let reading = false;
@@ -181,6 +180,7 @@ export async function readTossup(client, channel, category='', voiceOn=false, vo
     let q;
     let answercheck;
     let dispatcher; // The voiceChannel controller!
+    let dispatcher2; // The second controller
     let promptLoopCounter = 3;
     const buzzQueue = []; // Somehow const doesn't mean immutability
     const correctWrong = {
@@ -307,14 +307,20 @@ export async function readTossup(client, channel, category='', voiceOn=false, vo
         buzzQueue.push(msg);
         if (buzz) return;
 
-        if (voiceChannel) dispatcher.pause();
+        if (voiceChannel) {
+          dispatcher.pause();
+          dispatcher2.pause();
+        }
         paused = true;
         buzz = true;
 
         await nextBuzz();
 
         buzz = false;
-        if (voiceChannel) dispatcher.resume();
+        if (voiceChannel) {
+          dispatcher.pause();
+          dispatcher2.resume();
+        }
         paused = false;
       });
 
@@ -322,7 +328,10 @@ export async function readTossup(client, channel, category='', voiceOn=false, vo
         return new Promise(async function(resolve, reject) {
           const end = await buzzLoop();
           if (end) {
-            if (voiceChannel) dispatcher.end(); // Future? Dynamically chaining Promises
+            if (voiceChannel) {
+              dispatcher.end();
+              dispatcher.end();
+            } // Future? Dynamically chaining Promises
             resolveout(correctWrong);
           }
           if (buzzQueue.length > 0) {
@@ -336,11 +345,12 @@ export async function readTossup(client, channel, category='', voiceOn=false, vo
         reading = true;
         const qArray = res.text.split(' ');
         let interval;
-        let value = 5;
+        let index = 5;
+        const increment = 7;
 
-        q = qArray.slice(0, 7).join(' ');
-        const update = (msg, index) => {
-          if (value > qArray.length) {
+        q = qArray.slice(0, 5).join(' ');
+        const update = (msg) => {
+          if (index > qArray.length) {
             reading = false;
             clearInterval(interval);
             channel.send(`Players have 15 seconds to finish this question`)
@@ -356,9 +366,9 @@ export async function readTossup(client, channel, category='', voiceOn=false, vo
                 });
           }
           if (paused) return;
-          q += ' ' + qArray.slice(value, value+7).join(' ');
+          q += ' ' + qArray.slice(index, index + increment).join(' ');
           msg.edit(q);
-          value += 7;
+          index += increment;
           if (q.includes('(*)')) {
             isPower = false;
           }
@@ -366,7 +376,7 @@ export async function readTossup(client, channel, category='', voiceOn=false, vo
 
         channel.send(q).then((msg) => {
           interval = setInterval(function() {
-            update(msg, value);
+            update(msg, index);
           }, 1600);
         });
       } else {
@@ -381,12 +391,14 @@ export async function readTossup(client, channel, category='', voiceOn=false, vo
           voiceChannel.join()
               .then((connection) => {
                 reading = true;
+                dispatcher2 = connection.playFile(pathToSecondSoundFile);
+                dispatcher2.pause();
                 dispatcher = connection.playFile(pathToFirstSoundFile);
                 dispatcher.on('end', () => { // When the before power wav finishes
                   console.log('Power done');
                   isPower = false;
-                  dispatcher = connection.playFile(pathToSecondSoundFile);
-                  dispatcher.on('end', () => { // When the question finishes
+                  dispatcher2.resume();
+                  dispatcher2.on('end', () => { // When the question finishes
                     reading = false;
                     if (correct) return;
                     channel.send(`Players have 15 seconds to finish this question`)
@@ -398,6 +410,7 @@ export async function readTossup(client, channel, category='', voiceOn=false, vo
                               await printAnswer(channel, res.answer, res.answer.includes('/strong'));
                             }
                             dispatcher.destroy();
+                            dispatcher2.destroy();
                             connection.disconnect();
                             resolveout(correctWrong);
                           }, 15000);
