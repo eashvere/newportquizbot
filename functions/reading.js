@@ -184,13 +184,14 @@ export async function scorePlayersKeyv(correctWrong) {
             await main.keyv.set(userid, 0);
             currentValue = await main.keyv.get(userid);
           }
-          const membersOfGuild = await main.keyv.get(user.lastMessage.member.guild.id);
+          const membersOfGuild = await main.keyv.get(locationid);
           if (!membersOfGuild) {
-            await main.keyv.set(user.lastMessage.member.guild.id, '');
+            await main.keyv.set(locationid, '');
+            membersOfGuild = await main.keyv.get(locationid);
           }
           if (!membersOfGuild.includes(userid)) {
             membersOfGuild += ',' + userid;
-            await main.keyv.set(user.lastMessage.member.guild.id, membersOfGuild);
+            await main.keyv.set(locationid, membersOfGuild);
           }
 
           if (property === 'power') {

@@ -18,8 +18,8 @@ process.on('unhandledRejection', (reason, p) => {
   // application specific logging, throwing an error, or other logic here
 });
 
-const configConnection = `${process.env.USER}://${process.env.NAME}:${process.env.PASSWORD}@${process.env.HOST}:${process.env.PORT}/${process.env.DATABASE}`;
-const configConnectionScores = `${process.env.USER}://${process.env.NAME}:${process.env.PASSWORD}@${process.env.HOST}:${process.env.PORT}/${process.env.SCORESDB}`;
+const configConnection = `${process.env.USERDATABASE}://${process.env.NAME}:${process.env.PASSWORD}@${process.env.HOST}:${process.env.PORT}/${process.env.DATABASE}`;
+const configConnectionScores = `${process.env.USERDATABASE}://${process.env.NAME}:${process.env.PASSWORD}@${process.env.HOST}:${process.env.PORT}/${process.env.SCORESDB}`;
 const db = pgp(configConnection);
 const keyv = new Keyv(configConnectionScores);
 exports.db = db;

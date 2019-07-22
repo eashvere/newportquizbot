@@ -68,7 +68,7 @@ export class Timer {
       clearTimeout(timerId);
       timerId = setTimeout(callback, remaining);
     };
-    this.destory = function() {
+    this.destroy = function() {
       clearTimeout(timerId);
     };
     this.resume();
