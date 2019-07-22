@@ -4,6 +4,7 @@ require('dotenv').config();
 
 import {readdirSync} from 'fs';
 import {Client, Collection} from 'discord.js';
+const Keyv = require('keyv');
 const config = require('./config.json');
 const pgp = require('pg-promise')();
 const EventEmitter = require('events');
@@ -18,9 +19,13 @@ process.on('unhandledRejection', (reason, p) => {
 });
 
 const configConnection = `${process.env.USER}://${process.env.NAME}:${process.env.PASSWORD}@${process.env.HOST}:${process.env.PORT}/${process.env.DATABASE}`;
+const configConnectionScores = `${process.env.USER}://${process.env.NAME}:${process.env.PASSWORD}@${process.env.HOST}:${process.env.PORT}/${process.env.SCORESDB}`;
 const db = pgp(configConnection);
+const keyv = new Keyv(configConnectionScores);
 exports.db = db;
+exports.keyv = keyv;
 exports.events = events;
+exports.tournaments = {};
 console.log('DB ONLINE');
 const client = new Client();
 client.commands = new Collection();

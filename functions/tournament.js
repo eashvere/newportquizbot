@@ -1,4 +1,4 @@
-import {readTossup} from 'reading.js';
+import {readTossup, readBonus, scorePlayersKeyv} from './reading.js';
 
 const teams = [];
 const groups = [];
@@ -114,7 +114,7 @@ const serializeTeams = (teamname, guild) => {
 /**
  * Tournament Class
  */
-class Tournament {
+export class Tournament {
   /**
    *
    * @param {Channel} channel The channel where the Tourney happens
@@ -129,14 +129,17 @@ class Tournament {
    * @param {String} name The name of the group
    */
   async group_(message, name) {
-    if (groups.some((eachGroup) => {
-      return eachGroup.name === name;
-    })) {
-      await this.channel.send(`That group already exists!`);
-      return;
-    }
-    group.push(new Group(name, message.author));
-    await this.channel.send(`New group ${name} created!`);
+    return new Promise(async (resolve, reject) => {
+      if (groups.some((eachGroup) => {
+        return eachGroup.name === name;
+      })) {
+        await this.channel.send(`That group already exists!`);
+        return;
+      }
+      group.push(new Group(name, message.author));
+      await this.channel.send(`New group ${name} created!`);
+      resolve();
+    });
   }
 
   /**
@@ -144,12 +147,15 @@ class Tournament {
    * @param {String} message The command message
    */
   async myGroup(message) {
-    group = getGroup(message.author);
-    if (group !== null) {
-      await this.channel.send(group.name);
-    } else {
-      await this.channel.send(`You're not in a team`);
-    }
+    return new Promise(async (resolve, reject) => {
+      group = getGroup(message.author);
+      if (group !== null) {
+        await this.channel.send(group.name);
+      } else {
+        await this.channel.send(`You're not in a team`);
+      }
+      resolve();
+    });
   }
 
   /**
@@ -158,49 +164,55 @@ class Tournament {
    * @param {String} name The team name
    */
   async team_(message, name) {
-    let player;
-    if (teams.some((eachTeam) => {
-      return eachTeam.name === name;
-    })) {
-      await this.channel.send(`That team already exists!`);
-      return;
-    }
+    return new Promise(async (resolve, reject) => {
+      let player;
+      if (teams.some((eachTeam) => {
+        return eachTeam.name === name;
+      })) {
+        await this.channel.send(`That team already exists!`);
+        return reject(new Error('Team Already exists'));
+      }
 
-    if (get_team(message.author, message.guild) !== null) {
-      await this.channel.send(`You're already in a Team!`);
-      return;
-    } else {
-      player = new Player(message.author, message.guild);
-      players.push(player);
-    }
+      if (get_team(message.author, message.guild) !== null) {
+        await this.channel.send(`You're already in a Team!`);
+        return reject(new Error('Already in Team'));
+      } else {
+        player = new Player(message.author, message.guild);
+        players.push(player);
+      }
 
-    const team = new Team(message.guild, name, message.author, []);
-    team.members.push(player);
-    teams.push(team);
-    if (message.author.nickname) {
-      await this.channel.send(`New Team ${name} created! Type .join ${name} to join ${message.author.nickname}`);
-    } else {
-      await this.channel.send(`New Team ${name} created! Type .join ${name} to join ${message.author.username}`);
-    }
+      const team = new Team(message.guild, name, message.author, []);
+      team.members.push(player);
+      teams.push(team);
+      if (message.author.nickname) {
+        await this.channel.send(`New Team ${name} created! Type .join ${name} to join ${message.author.nickname}`);
+      } else {
+        await this.channel.send(`New Team ${name} created! Type .join ${name} to join ${message.author.username}`);
+      }
+      resolve();
+    });
   }
   /**
    *
    * @param {Message} message The command message
    */
   async teams_(message) {
-    const teamsinguild = [];
-    for (team of teams) {
-      if (team.guild === message.guild) {
-        teamsinguild.push(team);
+    return new Promise(async (resolve, reject) => {
+      const teamsinguild = [];
+      for (team of teams) {
+        if (team.guild === message.guild) {
+          teamsinguild.push(team);
+        }
       }
-    }
-    if (teamsinguild) {
-      const teamlist = teamsinguild.map((team) => `:small_blue_diamond: ${team.name} + \n`);
-      const teamliststring = `Current teams in ${message.gulid.name}: \n` + teamlist.sort().join('');
-      await this.channel.send(teamliststring);
-    } else {
-      await this.channel.send(`No teams have been made in this server`);
-    }
+      if (teamsinguild) {
+        const teamlist = teamsinguild.map((team) => `:small_blue_diamond: ${team.name} + \n`);
+        const teamliststring = `Current teams in ${message.gulid.name}: \n` + teamlist.sort().join('');
+        await this.channel.send(teamliststring);
+      } else {
+        await this.channel.send(`No teams have been made in this server`);
+      }
+      resolve();
+    });
   }
 
   /**
@@ -208,12 +220,15 @@ class Tournament {
    * @param {Message} message The command message
    */
   async myteam(message) {
-    team = getTeam(message.author, message.guild);
-    if (team) {
-      await this.channel.send(team.name);
-    } else {
-      await this.channel.send(`You're not in a team`);
-    }
+    return new Promise(async (resolve, reject) => {
+      team = getTeam(message.author, message.guild);
+      if (team) {
+        await this.channel.send(team.name);
+      } else {
+        await this.channel.send(`You're not in a team`);
+      }
+      resolve();
+    });
   }
 
   /**
@@ -222,25 +237,29 @@ class Tournament {
    * @param {GuildMember} newCaptain The new captain of the team
    */
   async captain(message, newCaptain=null) {
-    team = getTeam(message.author, message.guild);
-    if (team) {
-      if (!newCaptain) {
-        await this.channel.send(`${(team.captain.nickname) ? team.captain.nickname : team.captain.username} is the captain of your team ${team.name}`);
-        return;
-      }
-      if (team.captain === message.author) {
-        if (team.membes.includes(getPlayer(new_captain, message.guild))) {
-          team.captain = newCaptain;
-          await this.channel.send(`New team captain of ${team.name}: ${(team.captain.nickname) ? team.captain.nickname : team.captain.username}`);
+    return new Promise(async (resolve, reject) => {
+      team = getTeam(message.author, message.guild);
+      if (team) {
+        if (!newCaptain) {
+          await this.channel.send(`${(team.captain.nickname) ? team.captain.nickname : team.captain.username} is the captain of your team ${team.name}`);
+          return;
+        }
+        if (team.captain === message.author) {
+          if (team.membes.includes(getPlayer(new_captain, message.guild))) {
+            team.captain = newCaptain;
+            await this.channel.send(`New team captain of ${team.name}: ${(team.captain.nickname) ? team.captain.nickname : team.captain.username}`);
+          } else {
+            await this.channel.send(`${(team.captain.nickname) ? team.captain.nickname : team.captain.username} is not on your team`);
+          }
         } else {
-          await this.channel.send(`${(team.captain.nickname) ? team.captain.nickname : team.captain.username} is not on your team`);
+          await this.channel.send(`You aren't the captain of ${team.name}`);
         }
       } else {
-        await this.channel.send(`You aren't the captain of ${team.name}`);
+        await this.channel.send(`You're not in a team!`);
       }
-    } else {
-      await this.channel.send(`You're not in a team!`);
-    }
+
+      resolve();
+    });
   }
 
   /**
@@ -249,19 +268,21 @@ class Tournament {
    * @param {String} name The name of the team to join
    */
   async join(message, name) {
-    if (getPlayer(message.author, message.server)) {
-      await this.channel.send(`You're already in a team. Leave to join another`);
-      return;
-    }
-    for (team of teams) {
-      if (team.name === name) {
-        const player = new Player(message.author, message.guild);
-        team.members.push(player);
-        await this.channel.send(`${(message.author.nickname) ? message.author.nickname : message.author.username} is not on your team`);
-        return;
+    return new Promise(async (resolve, reject) => {
+      if (getPlayer(message.author, message.server)) {
+        await this.channel.send(`You're already in a team. Leave to join another`);
+        return reject(new Error('Already in Team'));
       }
-    }
-    await this.channel.send(`I couldn't find the team you wanted to join`);
+      for (team of teams) {
+        if (team.name === name) {
+          const player = new Player(message.author, message.guild);
+          team.members.push(player);
+          await this.channel.send(`${(message.author.nickname) ? message.author.nickname : message.author.username} is not on your team`);
+          return reject(new Error('Player not on your team'));
+        }
+      }
+      await this.channel.send(`I couldn't find the team you wanted to join`);
+    });
   }
 
   /**
@@ -270,32 +291,35 @@ class Tournament {
    * @param {String} name The name of the team to leave
    */
   async leave(message, name=null) {
-    const memberTeam = getTeam(message.author, message.guild);
-    if (!name) {
-      if (!memberTeam) {
-        await this.channel.send(`You're not in a team`);
-        return;
-      }
-    }
-
-    if (!memberTeam && (memberTeam.name === name || !name)) {
-      if (memberTeam.members.length === 1) {
-        await this.channel.send(`You're last person on this team. Leaving will delete it. You can always create a new one with .team <team_name>`);
-        teams.splice(array.indexOf(memberTeam), 1);
-        return;
-      }
-      if (message.author === memberTeam.captain) {
-        const captainDefer = memberTeam.members.map((member) => `:small_blue_diamond: ${member.username} + \n`);
-        await this.channel.send(`You're the captain of the team! Defer captainship to your team mates
-                                .captain @user.\nTeam members:\n` + captainDefer.join(''));
-        return;
+    return new Promise(async (resolve, reject) => {
+      const memberTeam = getTeam(message.author, message.guild);
+      if (!name) {
+        if (!memberTeam) {
+          await this.channel.send(`You're not in a team`);
+          return reject(new Error('Not on a Team'));
+        }
       }
 
-      memberTeam.members.splice(memberTeam.members.indexOf(getPlayer(message.author, message.guild)), 1);
-      await this.channel.send(`Left ${name}`);
-      return;
-    }
-    await this.channel.send(`You're not in a team by that name`);
+      if (memberTeam && (memberTeam.name === name || !name)) {
+        if (memberTeam.members.length === 1) {
+          await this.channel.send(`You're last person on this team. Leaving will delete it. You can always create a new one with .team <team_name>`);
+          teams.splice(array.indexOf(memberTeam), 1);
+          return resolve();
+        }
+        if (message.author === memberTeam.captain) {
+          const captainDefer = memberTeam.members.map((member) => `:small_blue_diamond: ${member.username} + \n`);
+          await this.channel.send(`You're the captain of the team! Defer captainship to your team mates
+                                  .captain @user.\nTeam members:\n` + captainDefer.join(''));
+          return;
+        }
+
+        memberTeam.members.splice(memberTeam.members.indexOf(getPlayer(message.author, message.guild)), 1);
+        await this.channel.send(`Left ${name}`);
+        return resolve();
+      }
+      await this.channel.send(`You're not in a team by that name`);
+      reject(new Error('Not in a Team by Name'));
+    });
   }
 
   /**
@@ -304,97 +328,56 @@ class Tournament {
    * @param {Array} teamsInGame The teams in game
    */
   async tournament(message, teamsInGame=null) {
-    const callerTeam = getTeam(message.author, message.guild);
-    if (!callerTeam) {
-      await this.channel.send(`You should make a team first`);
-      return;
-    }
-    if (callerTeam.captain !== message.author) {
-      await this.channel.send(`You can't a tournament unless you're a captain`);
-      return;
-    }
-    if (!teamsInGame) {
-      teamsInGame = teams.filter((team) => team.guild === message.guild);
-      for (x of teamsInGame) {
-        x.score = 0;
+    new Promise(async (resolve, reject) => {
+      const callerTeam = getTeam(message.author, message.guild);
+      if (!callerTeam) {
+        await this.channel.send(`You should make a team first`);
+        return reject(new Error('Create Team first'));
       }
-      const tourneystartstring = `Starting tournament with:\n` + teamsInGame.map((x) => `:small_blue_diamond: ${x.name} \n`).join('');
-      await this.channel.send(tourneystartstring);
-    } else {
-      const teamNames = teamsInGame.split(' ');
-      if (teamNames.length < 2) {
-        await this.channel.send(`You must have atleast 2 teams to start a tournament`);
-        return;
+      if (callerTeam.captain !== message.author) {
+        await this.channel.send(`You can't a tournament unless you're a captain`);
+        return reject(new Error('Must be Captain'));
       }
-      teamsInGame = [];
-      for (teamname of teamNames) {
-        teamsInGame.push(serializeTeams(teamname, message.guild));
-      }
-      for (team of teamsInGame) {
-        if (!teams.map((t) => t.name).includes(team)) {
-          await this.channel.send(`Check your spelling. Teams in this server are:\n` + teams.map((t_) => `:small_blue_diamond: + ${t_.name} + \n`));
-          return;
+      if (!teamsInGame) {
+        teamsInGame = teams.filter((team) => team.guild === message.guild);
+        for (x of teamsInGame) {
+          x.score = 0;
         }
-      }
-    }
-
-    let bonus;
-    const bonusvote = await groupVote(this.channel, `Would you like bonuses?`);
-    if (bonusvote) {
-      bonus = true;
-      await this.channel.send(`We're doing bonuses`);
-    } else {
-      bonus = false;
-      await this.channel.send(`I guess we're not doing bonuses`);
-    }
-
-    let numQuestions = 20;
-    await this.channel.send(`Ok how many questions do you want. Default is ${numQuestions}`);
-    const numberOfQuestions = (response) => {
-      return typeof(response) === 'number';
-    };
-    this.channel.awaitMessages(numberOfQuestions, {maxMatches: 1, time: 10000, errors: ['time']})
-        .then(async (collected) => {
-          numQuestions = collected.first().content.parseInt();
-          await this.channel.send(`Ok, We're playing ${numQuestions} questions`);
-        })
-        .catch(async (err) => {
-          if (err) {
-            console.error(err);
+        const tourneystartstring = `Starting tournament with:\n` + teamsInGame.map((x) => `:small_blue_diamond: ${x.name} \n`).join('');
+        await this.channel.send(tourneystartstring);
+      } else {
+        const teamNames = teamsInGame.split(' ');
+        if (teamNames.length < 2) {
+          await this.channel.send(`You must have atleast 2 teams to start a tournament`);
+          return reject(new Error('Need 2 Teams'));
+        }
+        teamsInGame = [];
+        for (teamname of teamNames) {
+          teamsInGame.push(serializeTeams(teamname, message.guild));
+        }
+        for (team of teamsInGame) {
+          if (!teams.map((t) => t.name).includes(team)) {
+            await this.channel.send(`Check your spelling. Teams in this server are:\n` + teams.map((t_) => `:small_blue_diamond: + ${t_.name} + \n`));
+            return reject(new Error('Check Spelling of Teams'));
           }
-          await this.channel.send(`Ok, defaulting to ${numQuestions} questions`);
-        });
-
-    await this.channel.send(`Tournament Starting! This is you're setup:\nTeams competing` + teamsInGame.map((t_) => t_.name).join(', ') + `\nNumber of Tossups: ${numQuestions}\nBonus Questions: ${bonus}\n If this correct type yes. To edit type teams or tossup`);
-
-    const checkEdit = (response) => {
-      return ['yes', 'y', 'ye', 'yeet', 'teams', 'tossup', 'bonus'].includes(response.content.lower());
-    };
-
-    const response = await this.channel.awaitMessages(checkEdit, numberOfQuestions, {maxMatches: 1, time: 15000, errors: ['time']}).first().content;
-
-    if (['yes', 'y', 'ye', 'yeet'].includes(response)) {
-      await this.channel.send(`Tournament Starting. Good Luck`);
-    } else if (response === 'teams') {
-      await this.channel.send(`Ok, re-enter the list of team competing, separated by spaces`);
-      msg = await this.channel.awaitMessages((response) => true, {maxMatches: 1, time: 15000});
-      teamNames = teamsInGame.split(' ');
-      if (teamNames.length < 2) {
-        await this.channel.send(`You must have atleast 2 teams to start a tournament`);
-        return;
-      }
-      teamsInGame = [];
-      for (teamname of teamNames) {
-        teamsInGame.push(serializeTeams(teamname, message.guild));
-      }
-      for (team of teamsInGame) {
-        if (!teams.map((t) => t.name).includes(team)) {
-          await this.channel.send(`Check your spelling. Teams in this server are:\n` + teams.map((t_) => `:small_blue_diamond: + ${t_.name} + \n`));
-          return;
         }
       }
-    } else if (response === 'tossup') {
-      await this.channel.send(`Ok how many questions do you want. Original is ${numQuestions}`);
+
+      let bonus;
+      const bonusvote = await groupVote(this.channel, `Would you like bonuses?`);
+      if (bonusvote) {
+        bonus = true;
+        await this.channel.send(`We're doing bonuses`);
+      } else {
+        bonus = false;
+        await this.channel.send(`I guess we're not doing bonuses`);
+      }
+
+      let numQuestions = 20;
+      await this.channel.send(`Ok how many questions do you want. Default is ${numQuestions}`);
+      const numberOfQuestions = (response) => {
+        return typeof(response) === 'number';
+      };
       this.channel.awaitMessages(numberOfQuestions, {maxMatches: 1, time: 10000, errors: ['time']})
           .then(async (collected) => {
             numQuestions = collected.first().content.parseInt();
@@ -406,37 +389,98 @@ class Tournament {
             }
             await this.channel.send(`Ok, defaulting to ${numQuestions} questions`);
           });
-    }
 
-    const playerlist = [];
-    for (t of teamsInGame) {
-      console.log(t.members);
-      playerlist.push(t.members);
-    }
-    console.log(playerlist);
-    for (let i=0; i<numQuestions; i++) {
-      await this.channel.send(`Tossup ${i+1} of ${numQuestions} questions`);
-      setTimeout(async () => {
-        await readTossup(this.channel);
-      }, 1000);
-    }
+      await this.channel.send(`Tournament Starting! This is you're setup:\nTeams competing` + teamsInGame.map((t_) => t_.name).join(', ') + `\nNumber of Tossups: ${numQuestions}\nBonus Questions: ${bonus}\n If this correct type yes. To edit type teams or tossup`);
 
-    teamsInGame.sort((a, b) => {
-      return b.score-a.score;
+      const checkEdit = (response) => {
+        return ['yes', 'y', 'ye', 'yeet', 'teams', 'tossup', 'bonus'].includes(response.content.lower());
+      };
+
+      const response = await this.channel.awaitMessages(checkEdit, numberOfQuestions, {maxMatches: 1, time: 15000, errors: ['time']}).first().content;
+
+      if (['yes', 'y', 'ye', 'yeet'].includes(response)) {
+        await this.channel.send(`Tournament Starting. Good Luck`);
+      } else if (response === 'teams') {
+        await this.channel.send(`Ok, re-enter the list of team competing, separated by spaces`);
+        msg = await this.channel.awaitMessages((response) => true, {maxMatches: 1, time: 15000});
+        teamNames = teamsInGame.split(' ');
+        if (teamNames.length < 2) {
+          await this.channel.send(`You must have atleast 2 teams to start a tournament`);
+          return reject(new Error('Need 2 Teams'));
+        }
+        teamsInGame = [];
+        for (teamname of teamNames) {
+          teamsInGame.push(serializeTeams(teamname, message.guild));
+        }
+        for (team of teamsInGame) {
+          if (!teams.map((t) => t.name).includes(team)) {
+            await this.channel.send(`Check your spelling. Teams in this server are:\n` + teams.map((t_) => `:small_blue_diamond: + ${t_.name} + \n`));
+            return reject(new Error('Check Spelling of Teams'));
+          }
+        }
+      } else if (response === 'tossup') {
+        await this.channel.send(`Ok how many questions do you want. Original is ${numQuestions}`);
+        this.channel.awaitMessages(numberOfQuestions, {maxMatches: 1, time: 10000, errors: ['time']})
+            .then(async (collected) => {
+              numQuestions = collected.first().content.parseInt();
+              await this.channel.send(`Ok, We're playing ${numQuestions} questions`);
+            })
+            .catch(async (err) => {
+              if (err) {
+                console.error(err);
+              }
+              await this.channel.send(`Ok, defaulting to ${numQuestions} questions`);
+            });
+      }
+
+      const playerlist = [];
+      for (t of teamsInGame) {
+        console.log(t.members);
+        playerlist.push(t.members);
+      }
+      console.log(playerlist);
+      for (let i=0; i<numQuestions; i++) {
+        await this.channel.send(`Tossup ${i+1} of ${numQuestions} questions`);
+        setTimeout(async () => {
+          const correctWrong = await readTossup(this.channel);
+          for (user of correctWrong.power) {
+            getTeam(powercorrect[0], this.channel.guild).score += 15;
+          }
+          for (user of correctWrong.correct) {
+            getTeam(powercorrect[0], this.channel.guild).score += 10;
+          }
+          for (user of correctWrong.negs) {
+            getTeam(powercorrect[0], this.channel.guild).score -= 5;
+          }
+          await scorePlayersKeyv(correctWrong);
+          const powercorrect = correctWrong.power ? correctWrong.power : correctWrong.correct;
+          const bonusRight = await readBonus(channel, getTeam(powercorrect[0], this.channel.guild).members.map((player) => player.member.id));
+          getTeam(powercorrect[0], this.channel.guild).score += (bonusRight.length * 10);
+          await scorePlayersKeyv({correct: bonusRight.map((user) => user.id)});
+        }, 1000);
+      }
+
+      teamsInGame.sort((a, b) => {
+        return b.score-a.score;
+      });
+
+      await this.channel.send(`Tournament Done! Final Leaderboard:\n` + teamsInGame.map((t) => `:small_blue_diamond: ${t.name}: ${t.score} points\n`).join(''));
+      resolve();
     });
-
-    await this.channel.send(`Tournament Done! Final Leaderboard:\n` + teamsInGame.map((t) => `:small_blue_diamond: ${t.name}: ${t.score} points\n`).join(''));
   }
   /**
    *
    * @param {Message} message The command message
    */
   async score(message) {
-    const team = getTeam(message.author, message.guild);
-    const player = getPlayer(message.author, message.guild);
-    if (team) {
-      await this.channel.send(`Your team has ${team.score}\nYou've scored ${player.score} of them`);
-    }
+    return new Promise(async (resolve, reject) => {
+      const team = getTeam(message.author, message.guild);
+      const player = getPlayer(message.author, message.guild);
+      if (team) {
+        await this.channel.send(`Your team has ${team.score}\nYou've scored ${player.score} of them`);
+      }
+      resolve();
+    });
   }
 
   /**
@@ -444,11 +488,13 @@ class Tournament {
    * @param {Message} message The command message
    */
   async scores(message) {
-    scores = '';
-    for (team of teams.filter((x) => x.guild == message.guild)) {
-      scores += `:small_blue_diamond:${team.name}: ${team.score} points\n`;
-    }
+    return new Promise(async (resolve, reject) => {
+      scores = '';
+      for (team of teams.filter((x) => x.guild == message.guild)) {
+        scores += `:small_blue_diamond:${team.name}: ${team.score} points\n`;
+      }
 
-    await this.channel.send(scores);
+      await this.channel.send(scores);
+    });
   }
 }

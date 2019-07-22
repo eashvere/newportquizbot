@@ -21,8 +21,8 @@ export const groupVote = (channel, msg) => {
     const resultsEmbed = new RichEmbed()
         .setTitle('Vote Results')
         .setDescription(`Results of the Vote: ${msg}`)
-        .addField(`❤: ${results.get('❤').count-1} Votes`)
-        .addField(`👎: ${results.get('👎').count-1} Votes`);
+        .addField(`❤:`, `${results.get('❤').count-1} Votes`)
+        .addField(`👎:`, `${results.get('👎').count-1} Votes`);
 
     channel.send(resultsEmbed);
     voteMessage.delete(0);

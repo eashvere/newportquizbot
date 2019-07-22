@@ -4,7 +4,7 @@ const pgp = require('pg-promise')();
 const path = require('path');
 const main = require('../index.js');
 
-import {Tossup} from './classes.js';
+import {Tossup, Bonus} from './classes.js';
 
 const db = main.db;
 
@@ -31,6 +31,7 @@ function getSQL(file) {
 
 const sqlGivenCategory = getSQL('../sql/givencategory.sql');
 const sqlNoCategory = getSQL('../sql/nocategory.sql');
+const sqlBonus = getSQL('../sql/bonus.sql');
 
 /**
  * Get a Tossup from the QuizBowl DB
@@ -40,7 +41,7 @@ const sqlNoCategory = getSQL('../sql/nocategory.sql');
  *
  */
 export async function getTossup(categoryT='', numberQ=1, callback) {
-  return new Promise(function(resolve, reject) {
+  return new Promise((resolve, reject) => {
     if (categoryT) {
       db.one(sqlGivenCategory, {categoryT: categoryT, number: numberQ})
           .then((data) => {
@@ -60,5 +61,22 @@ export async function getTossup(categoryT='', numberQ=1, callback) {
             reject(error);
           });
     }
+  });
+}
+
+/**
+ *
+ * @param {Integer} number The amount of Bonus Questions
+ */
+export async function getBonus(number=1) {
+  return new Promise((resolve, reject) => {
+    db.one(sqlBonus, {number: number})
+        .then((data) => {
+          const b = new Bonus(data.leadin, data.array_agg.map((x) => unescape(x)), data.ans.map((x) => unescape(x)), data.categories_name, data.name);
+          resolve(b);
+        })
+        .catch((error) => {
+          reject(error);
+        });
   });
 }

@@ -16,8 +16,36 @@ export class Tossup {
     this.location = location;
     this.power = power;
   }
+  /**
+   * @return {Object} Javascript object
+   */
+  toString() {
+    return {text: this.text, formatted_answer: this.answer, name: this.location, power: this.power};
+  }
 }
 
-Tossup.prototype.toString = function() {
-  return {text: this.text, formatted_answer: this.answer, name: this.location, power: this.power};
-};
+/** Bonus Storage Class */
+export class Bonus {
+  /**
+   *
+   * @param {String} leadin Leadin
+   * @param {Array} texts The questions
+   * @param {Array} answers The answers
+   * @param {String} category The category
+   * @param {String} packet The packet
+   */
+  constructor(leadin, texts, answers, category, packet) {
+    this.leadin = leadin;
+    this.texts = texts;
+    this.answers = answers;
+    this.category = category;
+    this.packet = packet;
+  }
+
+  /**
+   * @return {Object} Javascript Object
+   */
+  toString() {
+    return {leadin: this.leadin, texts: this.texts, answers: this.answers, category: this.category, packet: this.packet};
+  }
+}

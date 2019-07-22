@@ -1,3 +1,5 @@
+const index = require('../index.js');
+
 /**
  * Handle Kicking a member. Must be a mod!
  * @param   {Message} msg What was sent by the person
@@ -7,8 +9,7 @@
  */
 export async function kickMember(msg, member) {
   const sender = msg.member;
-
-  if (sender.highestRole.calculatedPosition > 1) {
+  if (sender.highestRole.calculatedPosition < 2) {
     return msg.reply(`You aren't high enough in the food chain to ban`)
         .then((sent) => console.log(`Sent a you can't kick reply to ${msg.author.username}`))
         .catch(console.error);
@@ -36,3 +37,41 @@ export async function kickMember(msg, member) {
         .catch(console.error);
   }
 }
+
+/**
+ * @param  {String} event The event string
+ * @param  {Channel} channel The channel the command was called
+ */
+export async function removeCommandListener(event, channel) {
+  const eventName = event + channel.id;
+  if (index.events.listeners(eventName).length > 0) {
+    index.events.removeAllListeners(eventName);
+  }
+}
+/** Timer Class that replaces setTimeout */
+export class Timer {
+  /**
+ *
+ * @param {Function} callback The callback after the run
+ * @param {Integer} delay The delay in milliseconds
+ */
+  constructor(callback, delay) {
+    let timerId;
+    let start;
+    let remaining = delay;
+    this.pause = function() {
+      clearTimeout(timerId);
+      remaining -= Date.now() - start;
+    };
+    this.resume = function() {
+      start = Date.now();
+      clearTimeout(timerId);
+      timerId = setTimeout(callback, remaining);
+    };
+    this.destory = function() {
+      clearTimeout(timerId);
+    };
+    this.resume();
+  }
+}
+

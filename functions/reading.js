@@ -1,7 +1,9 @@
-import {getTossup} from './quizdb.js';
+import {getTossup, getBonus} from './quizdb.js';
 import {compareTwoStrings} from 'string-similarity';
+import {groupVote} from './voting.js';
+import {removeCommandListener, Timer} from './mainten.js';
 const say = require('say');
-const index = require('../index.js');
+const main = require('../index.js');
 const path = require('path');
 
 const exportText = (text, voice, speed, fileexport) => { // cuz say ain't promisified
@@ -163,6 +165,49 @@ async function printAnswer(channel, answer, formatted) {
 }
 
 /**
+ *
+ * @param {Object} correctWrong An object containing a list of user in powers, corrects, wrongs, and negs
+ */
+export async function scorePlayersKeyv(correctWrong) {
+  return new Promise(async (resolve, reject) => {
+    for (const property in correctWrong) {
+      if (correctWrong.hasOwnProperty(property)) {
+        for (const user of correctWrong[property]) {
+          const locationid = user.lastMessage.guild.id;
+          if (!locationid) {
+            locationid = user.lastMessage.channel.id;
+          }
+          const userid = locationid + ':' + user.username + ':' + user.id;
+          console.log(userid);
+          const currentValue = await main.keyv.get(userid);
+          if (!currentValue) {
+            await main.keyv.set(userid, 0);
+            currentValue = await main.keyv.get(userid);
+          }
+          const membersOfGuild = await main.keyv.get(user.lastMessage.member.guild.id);
+          if (!membersOfGuild) {
+            await main.keyv.set(user.lastMessage.member.guild.id, '');
+          }
+          if (!membersOfGuild.includes(userid)) {
+            membersOfGuild += ',' + userid;
+            await main.keyv.set(user.lastMessage.member.guild.id, membersOfGuild);
+          }
+
+          if (property === 'power') {
+            await main.keyv.set(userid, currentValue + 15);
+          } else if (property === 'correct') {
+            await main.keyv.set(userid, currentValue + 10);
+          } else if (property === 'negs') {
+            await main.keyv.set(userid, currentValue - 5);
+          }
+        }
+      }
+    }
+    resolve();
+  });
+}
+
+/**
  * Get a Question and read it in a voice channel
  * @param   {TextChannel} channel The location of the question order
  * @param   {String} category The category for the question
@@ -182,6 +227,8 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
     let dispatcher; // The voiceChannel controller!
     let dispatcher2; // The second controller
     let promptLoopCounter = 3;
+    let timeout;
+    let interval;
     const buzzQueue = []; // Somehow const doesn't mean immutability
     const correctWrong = {
       power: [],
@@ -192,6 +239,7 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
 
     getTossup(category, 1).then( async (res) => {
       let isPower = res.power; // Whether power has occured yet
+      console.log(res.answer);
 
       // printAnswer(channel, res.answer, res.answer.includes('/strong'));
 
@@ -244,8 +292,7 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
                 collected = collected.first();
                 if (collected.content === 'wd' || collected.content === 'withdraw') {
                   console.log(`${collected.author.username} is withdrawing`);
-                  resolve(false);
-                  throw new Error('withdraw');
+                  return resolve(false);
                 }
                 answercheck = await match(collected.content, res.answer, res.answer.includes('</strong'));
 
@@ -257,35 +304,35 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
                 if (answercheck === 'y') {
                   correct = true;
                   if (isPower) {
-                    correctWrong.power.push(collected.author.id);
+                    correctWrong.power.push(collected.author);
                     await channel.send(`Amazing Job ${collected.author.username}, you answered correctly in power! You get 15 points!`);
                   } else {
-                    correctWrong.correct.push(collected.author.id);
+                    correctWrong.correct.push(collected.author);
                     await channel.send(`Correct! ${collected.author.username}, 10 points!`);
                   }
                   resolve(true);
                 }
                 if (answercheck === 'n') {
                   if (reading) {
-                    correctWrong.negs.push(collected.author.id);
+                    correctWrong.negs.push(collected.author);
                     await channel.send(`Oof you got it wrong. During Q, Neg 5`);
                   } else {
-                    correctWrong.wrong.push(collected.author.id);
+                    correctWrong.wrong.push(collected.author);
                     await channel.send(`Oof you got it wrong. After Question so 0`);
                   }
                 }
                 resolve(false);
               })
               .catch( async (error) => {
-                if (error) reject(error);
-                if (error.message !== 'withdraw') { // Cuz idk how else to do it
-                  if (reading) {
-                    correctWrong.negs.push(msg.author.id);
-                    await channel.send(`Bruh, you didn't answer. During Q, Neg 5`);
-                  } else {
-                    correctWrong.wrong.push(msg.author.id);
-                    await channel.send(`Bruh, you didn't answer. After Question so 0`);
-                  }
+                if (error) {
+                  console.error(error);
+                }
+                if (reading) {
+                  correctWrong.negs.push(msg.author);
+                  await channel.send(`Bruh, you didn't answer. During Q, Neg 5`);
+                } else {
+                  correctWrong.wrong.push(msg.author);
+                  await channel.send(`Bruh, you didn't answer. After Question so 0`);
                 }
                 resolve(false);
               });
@@ -293,14 +340,13 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
       };
 
       const buzzEventName = 'buzz' + channel.id;
+      const skipEventName = 'skip' + channel.id;
 
-      if (index.events.listeners(buzzEventName).length > 0) {
-        index.events.removeAllListeners(buzzEventName);
-      }
+      removeCommandListener('buzz', channel);
 
-      index.events.on(buzzEventName, async (msg) => {
+      main.events.on(buzzEventName, async (msg) => {
         console.log(`${msg.author.username} has buzzed`);
-        if (full || correctWrong.wrong.includes(msg.author.id) || correctWrong.negs.includes(msg.author.id)) {
+        if (full || correctWrong.wrong.includes(msg.author) || correctWrong.negs.includes(msg.author)) {
           await channel.send(`Hey! You can't buzz anymore!`);
           return;
         }
@@ -312,6 +358,7 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
           dispatcher2.pause();
         }
         paused = true;
+        if (timeout) timeout.pause();
         buzz = true;
 
         await nextBuzz();
@@ -322,6 +369,24 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
           dispatcher2.resume();
         }
         paused = false;
+        if (timeout) timeout.resume();
+      });
+
+      removeCommandListener('skip', channel.id);
+
+      main.events.on(skipEventName, async (msg) => {
+        paused = true;
+        if (timeout) timeout.pause();
+        const shouldSkip = await groupVote(channel, `Should we skip this question?`);
+
+        if (shouldSkip) {
+          if (interval) clearInterval(interval);
+          if (timeout) timeout.destroy();
+          resolveout(correctWrong);
+        } else {
+          paused = false;
+          if (timeout) timeout.resume();
+        }
       });
 
       const nextBuzz = () => {
@@ -332,6 +397,8 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
               dispatcher.end();
               dispatcher.end();
             } // Future? Dynamically chaining Promises
+            if (interval) clearInterval(interval);
+            if (timeout) timeout.destroy();
             resolveout(correctWrong);
           }
           if (buzzQueue.length > 0) {
@@ -344,7 +411,6 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
       if (!voiceOn) {
         reading = true;
         const qArray = res.text.split(' ');
-        let interval;
         let index = 5;
         const increment = 7;
 
@@ -355,7 +421,7 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
             clearInterval(interval);
             channel.send(`Players have 15 seconds to finish this question`)
                 .then(() => {
-                  setTimeout( async () => {
+                  timeout = new Timer( async () => {
                     if (!correct) {
                       full = true;
                       await channel.send(`15 seconds are up. No more buzzes!`);
@@ -403,7 +469,7 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
                     if (correct) return;
                     channel.send(`Players have 15 seconds to finish this question`)
                         .then(() => {
-                          setTimeout( async () => {
+                          timeout = new Timer( async () => {
                             if (!correct) {
                               full = true;
                               await channel.send(`15 seconds are up. No more buzzes!`);
@@ -434,7 +500,7 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
                   if (correct) return;
                   channel.send(`Players have 15 seconds to finish this question`)
                       .then(() => {
-                        setTimeout( async () => {
+                        timeout = new Timer( async () => {
                           if (!correct) {
                             full = true;
                             await channel.send(`15 seconds are up. No more buzzes!`);
@@ -450,6 +516,126 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
               .catch(console.error);
         }
       }
+    }).catch((err) => {
+      console.error(err);
+    });
+  });
+}
+
+/**
+ *
+ * @param {Channel} channel The command channel
+ * @param {Array} answerers An Array of User ids of those who can answer
+ * @param {Boolean} voiceOn Whether voice should one
+ * @param {VoiceChannel} voiceChannel The voicechannel the person asked
+ */
+export async function readBonus(channel, answerers, voiceOn=false, voiceChannel=null) {
+  return new Promise((resolveout, rejectout) => {
+    // Implement Question checking. Easy cuz no buzzing just check for author of message is answerer
+
+    // Implement the question reading. Easy cuz ctrl-c Tossup code and voice no power
+    if (!answerers) return;
+
+    const bonusCorrect = [];
+
+    const readTextToChannel = (channel, text) => {
+      return new Promise(async (resolve, reject) => {
+        const qArray = text.split(' ');
+        let interval;
+        let index = 5;
+        const increment = 7;
+
+        let q = qArray.slice(0, 5).join(' ');
+        const update = (msg) => {
+          if (index > qArray.length) {
+            clearInterval(interval);
+            return resolve();
+          }
+          q += ' ' + qArray.slice(index, index + increment).join(' ');
+          msg.edit(q);
+          index += increment;
+        };
+
+        channel.send(q).then((msg) => {
+          interval = setInterval(function() {
+            update(msg, index);
+          }, 1600);
+        });
+      });
+    };
+
+    const readBonus_ = (text, answer) => {
+      return new Promise(async (resolve, reject) => {
+        const qArray = text.split(' ');
+        let interval;
+        let timeout;
+        let index = 5;
+        const increment = 7;
+        let done = false;
+
+        let q = qArray.slice(0, 5).join(' ');
+        const update = (msg) => {
+          if (index > qArray.length) {
+            clearInterval(interval);
+            channel.send(`Players have 10 seconds to finish this bonus`)
+                .then(() => {
+                  timeout = setTimeout( async () => {
+                    done = true;
+                    await channel.send(`10 seconds are up. No more buzzes!`);
+                    await printAnswer(channel, answer, answer.includes('</'));
+                    return resolve(true);
+                  }, 15000);
+                });
+          }
+          q += ' ' + qArray.slice(index, index + increment).join(' ');
+          msg.edit(q);
+          index += increment;
+        };
+
+        channel.send(q).then((msg) => {
+          interval = setInterval(function() {
+            update(msg, index);
+          }, 1600);
+        });
+
+        const filter = (response) => {
+          return !response.author.bot && answerers.includes(response.author.id) && !done && response.content.startsWith('final:');
+        };
+        channel.awaitMessages(filter, {maxMatches: 1, time: ((qArray.length-index/increment) * 1600) + 8, errors: ['time']})
+            .then(async (collected) => {
+              collected = collected.first();
+              collected.content = collected.content.replace('final:', '');
+              const answercheck = await match(collected.content, answer, answer.includes('</'));
+              if (answercheck === 'y') {
+                bonusCorrect.push(collected.author);
+                channel.send(`Correct!`);
+              } else {
+                channel.send(`Wrong!`);
+              }
+              clearInterval(interval);
+              if (timeout) clearTimeout(timeout);
+              return resolve(true);
+            })
+            .catch((err) => {
+              if (err) console.error(err);
+              return resolve(false);
+            });
+      });
+    };
+
+    let end = false;
+    getBonus(1).then((res) => {
+      console.log(res.answers);
+      readTextToChannel(channel, res.leadin).then(async () => {
+        for (let i=0; i<res.texts.length; i++) {
+          end = false;
+          end = await readBonus_(res.texts[i], res.answers[i]);
+          if (end) {
+            continue;
+          }
+        }
+        resolveout(bonusCorrect);
+      });
     }).catch((err) => {
       console.error(err);
     });

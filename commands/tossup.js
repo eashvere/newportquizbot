@@ -1,4 +1,4 @@
-import {readTossup} from '../functions/reading.js';
+import {readTossup, scorePlayersKeyv} from '../functions/reading.js';
 import {findBestMatch} from 'string-similarity';
 import {categories, aliases} from '../index.js';
 
@@ -45,8 +45,7 @@ module.exports = {
       console.log(`${msg.author.username} ordered a random Tossup`);
     }
 
-    readTossup(msg.channel, category=category, voiceOn=voiceOn, voiceChannel=voiceChannel).then((correctWrong) => {
-      console.log(correctWrong);
-    });
+    const correctWrong = await readTossup(msg.channel, category=category, voiceOn=voiceOn, voiceChannel=voiceChannel);
+    await scorePlayersKeyv(correctWrong);
   },
 };
