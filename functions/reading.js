@@ -173,9 +173,13 @@ export async function scorePlayersKeyv(correctWrong) {
     for (const property in correctWrong) {
       if (correctWrong.hasOwnProperty(property)) {
         for (const user of correctWrong[property]) {
-          const locationid = user.lastMessage.guild.id;
-          if (!locationid) {
-            locationid = user.lastMessage.channel.id;
+          let locationid;
+          try {
+            locationid = user.lastMessage.guild.id;
+          } catch (error) {
+            if (!locationid) {
+              locationid = user.lastMessage.channel.id;
+            }
           }
           const userid = locationid + ':' + user.username + ':' + user.id;
           console.log(userid);
