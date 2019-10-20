@@ -19,6 +19,18 @@ Buzzing is simple through 'buzz'.
 
 If you want to choose your category, then execute '.t geography' or even its shortcut '.t geo'
 
+
+## Setup
+
+Install postgres. Create 2 databases, quizbowldb and quizbowlscores. 
+
+Get the dump file from [quizdb.org](https://www.quizdb.org/about) website
+
+Run ``` psql -U postgres quizbowldb < path-to-dump-file ```
+
+Change the name of ```categories.name``` to ```categories.categories_name``` in pgAdmin or through psql
+
+
 # Built with
 
 * [NodeJS]
