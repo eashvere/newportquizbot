@@ -4,3 +4,4 @@ quizdb-01222019.sql
 .env
 *.mp3
 *.wav
+.DS_Store
