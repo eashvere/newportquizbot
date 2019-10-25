@@ -55,12 +55,12 @@ function match(given, answer, formatted, isPrompt) {
 
       for (const bold of strong) {
         const numWords = bold.split(' ').length;
-        console.log(`Length: ${numWords}`);
+        // console.log(`Length: ${numWords}`);
         for (i = 0; i < given.split(' ').length - numWords + 1; i++) {
           bold = bold.replace('<u>', '').replace('</u>', '').replace('<strong>', '').replace('</strong>', '');
           const phrase = given.split(' ').slice(i, i + numWords).join(' ');
           const ratio = compareTwoStrings(phrase.toLowerCase(), bold.toLowerCase());
-          console.log(`Bold: ${bold}, Phrase: ${phrase}, Ratio: ${ratio}`);
+          // console.log(`Bold: ${bold}, Phrase: ${phrase}, Ratio: ${ratio}`);
           if (ratio > 0.7) {
             match = 'y';
             resolve(match);
@@ -85,8 +85,8 @@ function match(given, answer, formatted, isPrompt) {
       for (const word of answers) {
         for (const w of givens) {
           const ratio = compareTwoStrings(w.toLowerCase(), word.toLowerCase());
-          console.log(`Given: ${w}, Answer:${word}`);
-          console.log(`The ratio is ${ratio}`);
+          // console.log(`Given: ${w}, Answer:${word}`);
+          // console.log(`The ratio is ${ratio}`);
           if (ratio > 0.75) {
             match = 'y';
             resolve(match);

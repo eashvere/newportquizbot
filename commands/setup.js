@@ -1,4 +1,4 @@
-import {Tournament} from '../commands/tournament.js';
+import {Tournament} from '../functions/tournament.js';
 import {groupVote} from '../functions/voting.js';
 const main = require('../index.js');
 
@@ -9,14 +9,16 @@ module.exports = {
   async execute(message) {
     if (Object.keys(main.tournaments).includes(message.channel.id)) {
       await message.channel.send(`WAIT! There's already a tournament in this channel`);
-      if (!groupVote(message.channel, 'Should we destroy our current Tournament and remake it')) {
+      const voteResult = await groupVote(message.channel, 'Should we destroy our current Tournament and remake it');
+      if (!voteResult) {
         await message.channel.send(`Keeping...`);
         return;
       } else {
         await message.channel.send(`Destroying...`);
       }
     }
-    tournament = new Tournament(message.channel);
-    main.tournament[message.channel.id] = tournament;
+    const tournament = new Tournament(message.channel);
+    main.tournaments[message.channel.id] = tournament;
+    await message.channel.send(`Creating a Tournament`);
   },
 };
