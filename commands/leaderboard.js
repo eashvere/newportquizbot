@@ -6,9 +6,13 @@ module.exports = {
   description: 'Get your personal score on this DM or Guild',
   cooldown: 5,
   async execute(message, args) {
-    const locationid = message.guild.id;
-    if (!locationid) {
-      locationid = message.channel.id;
+    let locationid;
+    try {
+      locationid = message.guild.id;
+    } catch (error) {
+      if (!locationid) {
+        locationid = message.channel.id;
+      }
     }
     let listofPeople = await main.keyv.get(locationid);
     listofPeople = listofPeople.split(',');

@@ -518,11 +518,10 @@ export class Tournament {
           powercorrect = '';
         }
 
-        let bonusRight;
         if (powercorrect && bonus) {
-          bonusRight = await readBonus(this.channel, this.getTeam(powercorrect[0], this.channel.guild).members.map((player) => player.member.id));
+          console.log(this.getTeam(powercorrect[0], this.channel.guild).members.map((player) => player.member.id));
+          const bonusRight = await readBonus(this.channel, this.getTeam(powercorrect[0], this.channel.guild).members.map((player) => player.member.id));
           this.getTeam(powercorrect[0], this.channel.guild).score += (bonusRight.length * 10);
-          await scorePlayersKeyv({correct: bonusRight.map((user) => user.id)});
         }
       }
 

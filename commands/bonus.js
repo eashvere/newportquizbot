@@ -1,4 +1,5 @@
-import {readBonus} from '../functions/reading.js';
+import {readBonus, checksBeforeKeyvScoring} from '../functions/reading.js';
+const main = require('../index.js');
 
 module.exports = {
   name: 'bonus',
@@ -23,8 +24,11 @@ module.exports = {
       voiceChannel = msg.member.voiceChannel;
     }
 
-    readBonus(msg.channel, [msg.author.id], voiceOn, voiceChannel).then((bonusCorrects) => {
-      console.log(bonusCorrects);
+    readBonus(msg.channel, [msg.author.id], voiceOn, voiceChannel).then(async (bonusCorrects) => {
+      for (const user of bonusCorrects) {
+        const [userid, currentValue] = await checksBeforeKeyvScoring(user);
+        await main.keyv.set(userid, currentValue + 10);
+      }
     });
   },
 };

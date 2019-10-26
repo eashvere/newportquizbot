@@ -166,6 +166,41 @@ async function printAnswer(channel, answer, formatted) {
 
 /**
  *
+ * @param {User} user THe user that checks are being done on
+ *
+ * @return {String} the unique userid of the user
+ */
+export async function checksBeforeKeyvScoring(user) {
+  return new Promise(async (resolve, reject) => {
+    let locationid;
+    try {
+      locationid = user.lastMessage.guild.id;
+    } catch (error) {
+      if (!locationid) {
+        locationid = user.lastMessage.channel.id;
+      }
+    }
+    const userid = locationid + ':' + user.username + ':' + user.id;
+    const currentValue = await main.keyv.get(userid);
+    if (!currentValue) {
+      await main.keyv.set(userid, 0);
+      currentValue = await main.keyv.get(userid);
+    }
+    const membersOfGuild = await main.keyv.get(locationid);
+    if (!membersOfGuild) {
+      await main.keyv.set(locationid, '');
+      membersOfGuild = await main.keyv.get(locationid);
+    }
+    if (!membersOfGuild.includes(userid)) {
+      membersOfGuild += ',' + userid;
+      await main.keyv.set(locationid, membersOfGuild);
+    }
+    resolve([userid, currentValue]);
+  });
+}
+
+/**
+ *
  * @param {Object} correctWrong An object containing a list of user in powers, corrects, wrongs, and negs
  */
 export async function scorePlayersKeyv(correctWrong) {
@@ -173,30 +208,7 @@ export async function scorePlayersKeyv(correctWrong) {
     for (const property in correctWrong) {
       if (correctWrong.hasOwnProperty(property)) {
         for (const user of correctWrong[property]) {
-          let locationid;
-          try {
-            locationid = user.lastMessage.guild.id;
-          } catch (error) {
-            if (!locationid) {
-              locationid = user.lastMessage.channel.id;
-            }
-          }
-          const userid = locationid + ':' + user.username + ':' + user.id;
-          console.log(userid);
-          const currentValue = await main.keyv.get(userid);
-          if (!currentValue) {
-            await main.keyv.set(userid, 0);
-            currentValue = await main.keyv.get(userid);
-          }
-          const membersOfGuild = await main.keyv.get(locationid);
-          if (!membersOfGuild) {
-            await main.keyv.set(locationid, '');
-            membersOfGuild = await main.keyv.get(locationid);
-          }
-          if (!membersOfGuild.includes(userid)) {
-            membersOfGuild += ',' + userid;
-            await main.keyv.set(locationid, membersOfGuild);
-          }
+          const [userid, currentValue] = await checksBeforeKeyvScoring(user);
 
           if (property === 'power') {
             await main.keyv.set(userid, currentValue + 15);
@@ -535,11 +547,13 @@ export async function readTossup(channel, category='', voiceOn=false, voiceChann
  * @param {VoiceChannel} voiceChannel The voicechannel the person asked
  */
 export async function readBonus(channel, answerers, voiceOn=false, voiceChannel=null) {
-  return new Promise((resolveout, rejectout) => {
+  return new Promise(async (resolveout, rejectout) => {
     // Implement Question checking. Easy cuz no buzzing just check for author of message is answerer
 
     // Implement the question reading. Easy cuz ctrl-c Tossup code and voice no power
     if (!answerers) return;
+
+    await channel.send(`Please make sure to answer with final: <answer>`);
 
     const bonusCorrect = [];
 
